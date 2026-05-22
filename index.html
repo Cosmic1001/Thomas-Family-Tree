@@ -95,6 +95,10 @@
         </div>
       </div>
     </section>
+
+    <section class="danger-zone">
+      <button type="button" class="btn btn-ghost btn-small" id="clearAllBtn">Start Over (clear all data)</button>
+    </section>
   </div>
 
   <!-- ── Form ── -->
@@ -155,19 +159,45 @@
           <p class="section-note">Enter names as they appear (or will appear) on this site. Matching names across forms is how the tree links everyone together.</p>
 
           <div class="rel-block">
-            <div class="rel-title">
-              <span>Grandparents</span>
-              <button type="button" class="btn-add" id="addBtn-grandparents">+ Add</button>
+            <div class="rel-title"><span>Parents</span></div>
+            <div class="single-rel-row">
+              <label class="single-rel">
+                <span>Mother</span>
+                <input type="text" id="rel-mother" placeholder="e.g. Nordia Wright-Thomas" />
+              </label>
+              <label class="single-rel">
+                <span>Father</span>
+                <input type="text" id="rel-father" placeholder="e.g. Clifton Thomas" />
+              </label>
             </div>
-            <div class="rel-list" id="relList-grandparents"></div>
           </div>
 
           <div class="rel-block">
-            <div class="rel-title">
-              <span>Parents</span>
-              <button type="button" class="btn-add" id="addBtn-parents">+ Add</button>
+            <div class="rel-title"><span>Grandparents &mdash; Father's Side</span></div>
+            <div class="single-rel-row">
+              <label class="single-rel">
+                <span>Paternal Grandmother</span>
+                <input type="text" id="rel-patGrandmother" placeholder="Father's mother" />
+              </label>
+              <label class="single-rel">
+                <span>Paternal Grandfather</span>
+                <input type="text" id="rel-patGrandfather" placeholder="Father's father" />
+              </label>
             </div>
-            <div class="rel-list" id="relList-parents"></div>
+          </div>
+
+          <div class="rel-block">
+            <div class="rel-title"><span>Grandparents &mdash; Mother's Side</span></div>
+            <div class="single-rel-row">
+              <label class="single-rel">
+                <span>Maternal Grandmother</span>
+                <input type="text" id="rel-matGrandmother" placeholder="Mother's mother" />
+              </label>
+              <label class="single-rel">
+                <span>Maternal Grandfather</span>
+                <input type="text" id="rel-matGrandfather" placeholder="Mother's father" />
+              </label>
+            </div>
           </div>
 
           <div class="rel-block">
@@ -175,6 +205,7 @@
               <span>Siblings</span>
               <button type="button" class="btn-add" id="addBtn-siblings">+ Add</button>
             </div>
+            <p class="rel-hint">Siblings automatically share your Mother and Father unless they submit their own form with different parents.</p>
             <div class="rel-list" id="relList-siblings"></div>
           </div>
 
@@ -192,14 +223,6 @@
               <button type="button" class="btn-add" id="addBtn-children">+ Add</button>
             </div>
             <div class="rel-list" id="relList-children"></div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title">
-              <span>Grandchildren</span>
-              <button type="button" class="btn-add" id="addBtn-grandchildren">+ Add</button>
-            </div>
-            <div class="rel-list" id="relList-grandchildren"></div>
           </div>
 
         </fieldset>

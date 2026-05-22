@@ -135,12 +135,18 @@ const Router = {
 // ─────────────────────────────────────────
 // Form Manager
 // ─────────────────────────────────────────
-const RELS = ['grandparents', 'parents', 'siblings', 'spouse', 'children', 'grandchildren'];
+// Single-value relationships: one named person each
+const SINGLE_RELS = ['mother', 'father', 'patGrandmother', 'patGrandfather', 'matGrandmother', 'matGrandfather'];
+// List relationships: zero-or-more named people
+const LIST_RELS = ['siblings', 'spouse', 'children'];
+// Names referenced by anything (used by tree to register ghost nodes)
+const ALL_REL_KEYS = [...SINGLE_RELS, ...LIST_RELS];
 
 const FormManager = {
   init() {
-    RELS.forEach(rel => {
-      document.getElementById(`addBtn-${rel}`).addEventListener('click', () => this.addField(rel));
+    LIST_RELS.forEach(rel => {
+      const btn = document.getElementById(`addBtn-${rel}`);
+      if (btn) btn.addEventListener('click', () => this.addField(rel));
     });
     document.getElementById('personForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -151,6 +157,7 @@ const FormManager = {
 
   addField(rel, value = '') {
     const list = document.getElementById(`relList-${rel}`);
+    if (!list) return;
     const div = document.createElement('div');
     div.className = 'rel-item';
     div.innerHTML = `<input type="text" class="rel-input" placeholder="Full name" value="${esc(value)}" /><button type="button" class="rel-remove" title="Remove">&#10005;</button>`;
@@ -159,7 +166,7 @@ const FormManager = {
     div.querySelector('input').focus();
   },
 
-  getFields(rel) {
+  getListFields(rel) {
     return [...document.querySelectorAll(`#relList-${rel} .rel-input`)]
       .map(i => i.value.trim()).filter(Boolean);
   },
@@ -175,7 +182,10 @@ const FormManager = {
       photoUrl:        document.getElementById('photoUrl').value.trim()
     };
     const rels = {};
-    RELS.forEach(r => { rels[r] = this.getFields(r); });
+    SINGLE_RELS.forEach(r => {
+      rels[r] = (document.getElementById(`rel-${r}`)?.value || '').trim();
+    });
+    LIST_RELS.forEach(r => { rels[r] = this.getListFields(r); });
     return { info, rels };
   },
 
@@ -204,15 +214,38 @@ const FormManager = {
     }
 
     Storage.save(person);
-    showToast(`${info.fullName} saved to the family tree!`);
     this.reset();
     App.updateStats();
+    this.showSuccessModal(info.fullName);
+  },
+
+  showSuccessModal(name) {
+    Modal.open(`
+      <div class="success-modal">
+        <div class="success-icon">&#10003;</div>
+        <h2>Saved!</h2>
+        <p><strong>${esc(name)}</strong> has been added to the family tree.</p>
+        <div class="success-actions">
+          <button class="btn btn-primary" id="successTreeBtn">Generate Tree</button>
+          <button class="btn btn-outline" id="successHomeBtn">Back to Home</button>
+        </div>
+      </div>
+    `);
+    document.getElementById('successTreeBtn').onclick = () => { Modal.close(); Router.go('tree'); };
+    document.getElementById('successHomeBtn').onclick = () => { Modal.close(); Router.go('home'); };
   },
 
   reset() {
     document.getElementById('personId').value = '';
     document.getElementById('personForm').reset();
-    RELS.forEach(rel => { document.getElementById(`relList-${rel}`).innerHTML = ''; });
+    SINGLE_RELS.forEach(r => {
+      const el = document.getElementById(`rel-${r}`);
+      if (el) el.value = '';
+    });
+    LIST_RELS.forEach(rel => {
+      const list = document.getElementById(`relList-${rel}`);
+      if (list) list.innerHTML = '';
+    });
   },
 
   load(person) {
@@ -225,7 +258,11 @@ const FormManager = {
     document.getElementById('currentLocation').value = person.info.currentLocation || '';
     document.getElementById('bio').value             = person.info.bio || '';
     document.getElementById('photoUrl').value        = person.info.photoUrl || '';
-    RELS.forEach(rel => { (person.rels[rel] || []).forEach(n => this.addField(rel, n)); });
+    SINGLE_RELS.forEach(r => {
+      const el = document.getElementById(`rel-${r}`);
+      if (el) el.value = person.rels[r] || '';
+    });
+    LIST_RELS.forEach(rel => { (person.rels[rel] || []).forEach(n => this.addField(rel, n)); });
     Router.go('form');
     Modal.close();
   }
@@ -235,7 +272,12 @@ const FormManager = {
 // Tree
 // ─────────────────────────────────────────
 const Tree = {
-  NW: 178, NH: 86, HG: 52, VG: 115,
+  NW: 140, NH: 140,        // node bounding box (circle on top, name below)
+  CR: 38,                  // avatar circle radius
+  CY: 44,                  // circle center y within node
+  SPOUSE_GAP: 14,          // tight gap so marriage bar reads as a pair
+  UNIT_GAP: 56,            // gap between unrelated units in same generation
+  VG: 70,                  // vertical gap between generations
   t: { x: 0, y: 0, s: 1 },
   positions: null,
 
@@ -258,9 +300,9 @@ const Tree = {
   render() {
     this.root.innerHTML = '';
     const persons = Storage.getAll();
-    const { NW, NH, HG, VG } = this;
+    const { NW, NH, CR, CY, SPOUSE_GAP, UNIT_GAP, VG } = this;
 
-    // ── Build name registry ──
+    // ── 1. Build name registry ──
     const nameMap  = new Map(); // norm → person|null
     const dispName = new Map(); // norm → display string
 
@@ -269,17 +311,20 @@ const Tree = {
       const n = normName(s);
       if (n && !dispName.has(n)) { dispName.set(n, s.trim()); nameMap.set(n, null); }
     }
-
     for (const p of persons) {
       const n = normName(p.info.fullName);
       nameMap.set(n, p);
       dispName.set(n, p.info.fullName.trim());
-      RELS.forEach(r => (p.rels[r] || []).forEach(reg));
+      SINGLE_RELS.forEach(r => reg(p.rels[r]));
+      LIST_RELS.forEach(r => (p.rels[r] || []).forEach(reg));
     }
+    const allNorm = [...nameMap.keys()];
 
-    // ── Build parent→child edges ──
-    const childrenOf = new Map(); // norm → Set<norm>
-    const parentsOf  = new Map(); // norm → Set<norm>
+    // ── 2. Build relationship graphs ──
+    const childrenOf = new Map();
+    const parentsOf  = new Map();
+    const spouseOf   = new Map();
+    const siblingOf  = new Map();
 
     function addEdge(par, chi) {
       const p = normName(par), c = normName(chi);
@@ -289,74 +334,198 @@ const Tree = {
       if (!parentsOf.has(c)) parentsOf.set(c, new Set());
       parentsOf.get(c).add(p);
     }
-
-    for (const p of persons) {
-      const pn = normName(p.info.fullName);
-      (p.rels.parents  || []).forEach(par => addEdge(par, pn));
-      (p.rels.children || []).forEach(chi => addEdge(pn, chi));
+    function addSpouse(a, b) {
+      const an = normName(a), bn = normName(b);
+      if (!an || !bn || an === bn) return;
+      if (!spouseOf.has(an)) spouseOf.set(an, new Set());
+      spouseOf.get(an).add(bn);
+      if (!spouseOf.has(bn)) spouseOf.set(bn, new Set());
+      spouseOf.get(bn).add(an);
+    }
+    function addSibling(a, b) {
+      const an = normName(a), bn = normName(b);
+      if (!an || !bn || an === bn) return;
+      if (!siblingOf.has(an)) siblingOf.set(an, new Set());
+      siblingOf.get(an).add(bn);
+      if (!siblingOf.has(bn)) siblingOf.set(bn, new Set());
+      siblingOf.get(bn).add(an);
     }
 
-    // ── Assign generation levels via BFS from roots ──
-    const levels  = new Map();
-    const allNorm = new Set(nameMap.keys());
-    const roots   = [...allNorm].filter(n => !parentsOf.has(n) || parentsOf.get(n).size === 0);
+    // Direct parent/child edges from mother, father, children
+    for (const p of persons) {
+      const pn = normName(p.info.fullName);
+      if (p.rels.mother) addEdge(p.rels.mother, pn);
+      if (p.rels.father) addEdge(p.rels.father, pn);
+      (p.rels.children || []).forEach(chi => addEdge(pn, chi));
+      (p.rels.siblings || []).forEach(sb  => addSibling(pn, sb));
+    }
 
-    const queue = roots.map(r => [r, 0]);
-    let qi = 0;
-    while (qi < queue.length) {
-      const [n, lv] = queue[qi++];
-      if (!levels.has(n) || levels.get(n) < lv) {
-        levels.set(n, lv);
-        for (const c of (childrenOf.get(n) || [])) queue.push([c, lv + 1]);
+    // Paternal grandparents are the FATHER's parents.
+    // Maternal grandparents are the MOTHER's parents.
+    for (const p of persons) {
+      const f = p.rels.father, m = p.rels.mother;
+      if (f) {
+        if (p.rels.patGrandfather) addEdge(p.rels.patGrandfather, f);
+        if (p.rels.patGrandmother) addEdge(p.rels.patGrandmother, f);
+      }
+      if (m) {
+        if (p.rels.matGrandfather) addEdge(p.rels.matGrandfather, m);
+        if (p.rels.matGrandmother) addEdge(p.rels.matGrandmother, m);
       }
     }
 
-    // Grandparent / grandchild hints for nodes not yet reached by BFS
+    // Siblings inherit my Mother and Father (unless they have their own form
+    // that already gave them different parents).
     for (const p of persons) {
       const pn = normName(p.info.fullName);
-      const pl = levels.get(pn) ?? 0;
-      (p.rels.grandparents  || []).forEach(gp => {
-        const g = normName(gp), t = pl - 2;
-        if (!levels.has(g) || levels.get(g) > t) levels.set(g, t);
-      });
-      (p.rels.grandchildren || []).forEach(gc => {
-        const g = normName(gc), t = pl + 2;
-        if (!levels.has(g) || levels.get(g) < t) levels.set(g, t);
-      });
+      const m  = p.rels.mother ? normName(p.rels.mother) : null;
+      const f  = p.rels.father ? normName(p.rels.father) : null;
+      if (!m && !f) continue;
+      for (const sib of (p.rels.siblings || [])) {
+        const sn = normName(sib);
+        if (!sn) continue;
+        const sibPerson = nameMap.get(sn);
+        const sibHasOwnMother = sibPerson?.rels?.mother;
+        const sibHasOwnFather = sibPerson?.rels?.father;
+        if (m && !sibHasOwnMother) addEdge(m, sn);
+        if (f && !sibHasOwnFather) addEdge(f, sn);
+      }
     }
 
-    for (const n of allNorm) { if (!levels.has(n)) levels.set(n, 0); }
-
-    // Shift so minimum level = 0
-    const minLv = Math.min(...levels.values());
-    for (const [n, lv] of levels) levels.set(n, lv - minLv);
-
-    // ── Group and sort within each generation ──
-    const byLevel = new Map();
-    for (const [n, lv] of levels) {
-      if (!byLevel.has(lv)) byLevel.set(lv, []);
-      byLevel.get(lv).push(n);
-    }
-    const maxLv = Math.max(...levels.values(), 0);
-
-    for (let lv = 0; lv <= maxLv; lv++) {
-      const nodes = byLevel.get(lv) || [];
-      nodes.sort((a, b) => {
-        // Sort siblings together under the same parent
-        const prev = byLevel.get(lv - 1) || [];
-        const aP = Math.min(...([...(parentsOf.get(a) || [])].map(p => prev.indexOf(p)).filter(i => i >= 0)), Infinity);
-        const bP = Math.min(...([...(parentsOf.get(b) || [])].map(p => prev.indexOf(p)).filter(i => i >= 0)), Infinity);
-        if (aP !== bP) return aP - bP;
-        return (dispName.get(a) || a).localeCompare(dispName.get(b) || b);
-      });
+    // Pair couples only when EXACTLY two people are listed as parents of the same
+    // person — an unambiguous couple signal.
+    for (const ps of parentsOf.values()) {
+      if (ps.size === 2) {
+        const [a, b] = [...ps];
+        addSpouse(a, b);
+      }
     }
 
-    // ── Calculate X/Y positions ──
+    // ── 3. Build family units (a unit = 1 single or 2 spouses) ──
+    const unitOf = new Map();   // norm → unit_id
+    const units  = new Map();   // unit_id → { members: [...], children: Set<unit_id>, parents: Set<unit_id> }
+
+    for (const norm of allNorm) {
+      if (unitOf.has(norm)) continue;
+      const sp = [...(spouseOf.get(norm) || [])].filter(s => !unitOf.has(s)).sort()[0];
+      if (sp) {
+        const id = `u:${[norm, sp].sort().join('+')}`;
+        units.set(id, { members: [norm, sp], children: new Set(), parents: new Set() });
+        unitOf.set(norm, id);
+        unitOf.set(sp,   id);
+      } else {
+        const id = `u:${norm}`;
+        units.set(id, { members: [norm], children: new Set(), parents: new Set() });
+        unitOf.set(norm, id);
+      }
+    }
+
+    // Link parent unit → child unit (pick best-matching parent unit)
+    for (const [chi, ps] of parentsOf) {
+      const cu = unitOf.get(chi);
+      if (!cu) continue;
+      let bestU = null, bestMatch = 0;
+      for (const par of ps) {
+        const pu = unitOf.get(par);
+        if (!pu) continue;
+        const m = units.get(pu).members.filter(mem => ps.has(mem)).length;
+        if (m > bestMatch) { bestU = pu; bestMatch = m; }
+      }
+      if (bestU && bestU !== cu) {
+        units.get(bestU).children.add(cu);
+        units.get(cu).parents.add(bestU);
+      }
+    }
+
+    // ── 4. Assign unit generation levels (BFS from root units) ──
+    const unitLevel = new Map();
+    const allUnits  = [...units.keys()];
+    const rootUnits = allUnits.filter(u => units.get(u).parents.size === 0);
+
+    const q = rootUnits.map(u => [u, 0]);
+    let qi = 0;
+    while (qi < q.length) {
+      const [u, lv] = q[qi++];
+      if (!unitLevel.has(u) || unitLevel.get(u) < lv) {
+        unitLevel.set(u, lv);
+        for (const cu of units.get(u).children) q.push([cu, lv + 1]);
+      }
+    }
+
+    for (const u of allUnits) if (!unitLevel.has(u)) unitLevel.set(u, 0);
+
+    // Normalize to min level = 0
+    const minLv = Math.min(...unitLevel.values());
+    for (const [u, lv] of unitLevel) unitLevel.set(u, lv - minLv);
+
+    // ── 5. Recursive tidy-tree layout ──
+    const unitW = (u) => {
+      const m = units.get(u).members.length;
+      return m * NW + (m - 1) * SPOUSE_GAP;
+    };
+    const personOrderKey = (u) => {
+      // Sort by earliest-born or alphabetical
+      const mem = units.get(u).members[0];
+      const person = nameMap.get(mem);
+      return (person?.info.dateOfBirth || '9999') + (dispName.get(mem) || mem);
+    };
+    const sortedChildren = (u) => [...units.get(u).children].sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
+
+    const subW = new Map();
+    const unitX = new Map();   // unit → left x of unit's leftmost member
+    const beingCalc = new Set();
+
+    const calcW = (u) => {
+      if (subW.has(u)) return subW.get(u);
+      if (beingCalc.has(u)) return unitW(u);
+      beingCalc.add(u);
+      const my = unitW(u);
+      const kids = sortedChildren(u);
+      if (kids.length === 0) { subW.set(u, my); return my; }
+      let w = 0;
+      for (const c of kids) w += calcW(c);
+      w += (kids.length - 1) * UNIT_GAP;
+      w = Math.max(w, my);
+      subW.set(u, w);
+      return w;
+    };
+
+    const placed = new Set();
+    const place = (u, leftX) => {
+      if (placed.has(u)) return;
+      placed.add(u);
+      const my = unitW(u);
+      const sw = calcW(u);
+      const cx = leftX + sw / 2;
+      unitX.set(u, cx - my / 2);
+
+      const kids = sortedChildren(u);
+      let cur = leftX;
+      for (const c of kids) {
+        place(c, cur);
+        cur += calcW(c) + UNIT_GAP;
+      }
+    };
+
+    // Sort root units by name for stable layout
+    rootUnits.sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
+
+    let total = 0;
+    rootUnits.forEach((r, i) => { total += calcW(r); if (i > 0) total += UNIT_GAP; });
+    let cursor = -total / 2;
+    for (const r of rootUnits) {
+      place(r, cursor);
+      cursor += calcW(r) + UNIT_GAP;
+    }
+
+    // Build per-person positions
     const positions = new Map();
-    for (const [lv, nodes] of byLevel) {
-      const total = nodes.length * NW + (nodes.length - 1) * HG;
-      const x0 = -total / 2;
-      nodes.forEach((n, i) => positions.set(n, { x: x0 + i * (NW + HG), y: lv * (NH + VG) }));
+    for (const [uid, x] of unitX) {
+      const u = units.get(uid);
+      const y = unitLevel.get(uid) * (NH + VG);
+      u.members.forEach((mem, i) => {
+        positions.set(mem, { x: x + i * (NW + SPOUSE_GAP), y });
+      });
     }
     this.positions = positions;
 
@@ -369,65 +538,136 @@ const Tree = {
       return;
     }
 
-    // ── Edges ──
+    // ── 6. Render edges ──
     const edgesG = this.el('g', { class: 'edges' });
-    for (const [par, children] of childrenOf) {
-      const pp = positions.get(par);
-      if (!pp) continue;
-      const px = pp.x + NW / 2, py = pp.y + NH;
-      for (const chi of children) {
-        const cp = positions.get(chi);
-        if (!cp) continue;
-        const cx = cp.x + NW / 2, cy = cp.y;
-        const my = (py + cy) / 2;
+
+    // y coordinates relative to a node's bounding-box top:
+    //   circle top    = CY - CR
+    //   circle bottom = CY + CR
+    const circleBottom = CY + CR;
+    const circleTop    = CY - CR;
+
+    // Marriage bar between spouses (horizontal line at circle vertical-center)
+    for (const [uid, u] of units) {
+      if (u.members.length !== 2 || !unitX.has(uid)) continue;
+      const x = unitX.get(uid);
+      const y = unitLevel.get(uid) * (NH + VG) + CY;
+      // Goes from right edge of left circle to left edge of right circle
+      const x1 = x + NW / 2 + CR;
+      const x2 = x + NW + SPOUSE_GAP + NW / 2 - CR;
+      edgesG.appendChild(this.el('line', {
+        x1, y1: y, x2, y2: y,
+        class: 'tree-marriage'
+      }));
+    }
+
+    // Parent → children connectors
+    for (const [uid, u] of units) {
+      if (u.children.size === 0 || !unitX.has(uid)) continue;
+      const parentY = unitLevel.get(uid) * (NH + VG);
+      const isCouple = u.members.length === 2;
+
+      // Drop source: midpoint of marriage bar for couples, bottom of bounding box for singles
+      const srcX = unitX.get(uid) + unitW(uid) / 2;
+      const srcY = isCouple ? parentY + CY : parentY + NH;
+
+      const kids = [...u.children].filter(cu => unitX.has(cu));
+      if (!kids.length) continue;
+
+      const kidPts = kids.map(cu => ({
+        x: unitX.get(cu) + unitW(cu) / 2,
+        y: unitLevel.get(cu) * (NH + VG) + circleTop  // top of child's circle
+      }));
+
+      // Sibling bar y = middle of the gap between parent box bottom and child circle top
+      const parentBottom = parentY + NH;
+      const minKidY = Math.min(...kidPts.map(k => k.y));
+      const barY = parentBottom + (minKidY - parentBottom) / 2;
+
+      // Drop from source to sibling bar
+      edgesG.appendChild(this.el('path', {
+        d: `M ${srcX} ${srcY} V ${barY}`,
+        class: 'tree-edge'
+      }));
+
+      if (kidPts.length === 1) {
+        const k = kidPts[0];
         edgesG.appendChild(this.el('path', {
-          d: `M ${px} ${py} C ${px} ${my}, ${cx} ${my}, ${cx} ${cy}`,
+          d: `M ${srcX} ${barY} H ${k.x} V ${k.y}`,
           class: 'tree-edge'
         }));
+      } else {
+        const minX = Math.min(...kidPts.map(k => k.x), srcX);
+        const maxX = Math.max(...kidPts.map(k => k.x), srcX);
+        edgesG.appendChild(this.el('path', {
+          d: `M ${minX} ${barY} H ${maxX}`,
+          class: 'tree-edge'
+        }));
+        for (const k of kidPts) {
+          edgesG.appendChild(this.el('path', {
+            d: `M ${k.x} ${barY} V ${k.y}`,
+            class: 'tree-edge'
+          }));
+        }
       }
     }
+
     this.root.appendChild(edgesG);
 
-    // ── Nodes ──
+    // ── 7. Render nodes (circle on top, name below) ──
     const nodesG = this.el('g', { class: 'nodes' });
     for (const [norm, pos] of positions) {
       const person  = nameMap.get(norm);
       const dname   = dispName.get(norm) || norm;
       const isGhost = !person;
-      const g = this.el('g', { class: `tree-node${isGhost ? ' ghost' : ''}`, transform: `translate(${pos.x},${pos.y})` });
+      const g = this.el('g', {
+        class: `tree-node${isGhost ? ' ghost' : ''}`,
+        transform: `translate(${pos.x},${pos.y})`
+      });
 
       if (person) {
         g.style.cursor = 'pointer';
         g.addEventListener('click', () => this.openPerson(person));
       }
 
-      // Card background
-      g.appendChild(this.el('rect', {
-        width: NW, height: NH, rx: 10, ry: 10,
-        class: isGhost ? 'ghost-card' : 'node-card'
+      // Circle avatar
+      g.appendChild(this.el('circle', {
+        cx: NW / 2, cy: CY, r: CR,
+        class: isGhost ? 'node-circle ghost-circle' : 'node-circle'
       }));
 
-      // Avatar circle
-      const ini = initials(dname);
-      g.appendChild(this.el('circle', { cx: 30, cy: NH / 2, r: 22, class: isGhost ? 'ghost-avatar' : 'avatar' }));
-      const initT = this.el('text', { x: 30, y: NH / 2, 'text-anchor': 'middle', 'dominant-baseline': 'middle', class: 'avatar-initials' });
-      initT.textContent = ini;
+      // Initials inside the circle
+      const initT = this.el('text', {
+        x: NW / 2, y: CY,
+        'text-anchor': 'middle',
+        'dominant-baseline': 'central',
+        class: 'node-initials'
+      });
+      initT.textContent = initials(dname);
       g.appendChild(initT);
 
-      // Name (up to 2 lines, ~17 chars each)
-      const lines = this._wrapName(dname, 17);
-      const baseY = lines.length === 1 ? NH / 2 - 2 : NH / 2 - 11;
+      // Name underneath (up to 2 lines)
+      const lines = this._wrapName(dname, 16);
+      const nameY = CY + CR + 18;
       lines.forEach((line, i) => {
-        const t = this.el('text', { x: 60, y: baseY + i * 16, class: 'node-name' });
+        const t = this.el('text', {
+          x: NW / 2, y: nameY + i * 15,
+          'text-anchor': 'middle',
+          class: 'node-name'
+        });
         t.textContent = line;
         g.appendChild(t);
       });
 
-      // Birth / death year
+      // Birth–death years below the name
       if (person?.info.dateOfBirth) {
         const by = getYear(person.info.dateOfBirth);
         const dy = getYear(person.info.dateOfDeath);
-        const yt = this.el('text', { x: 60, y: NH - 11, class: 'node-year' });
+        const yt = this.el('text', {
+          x: NW / 2, y: nameY + lines.length * 15 + 2,
+          'text-anchor': 'middle',
+          class: 'node-year'
+        });
         yt.textContent = by + (dy ? ` – ${dy}` : '');
         g.appendChild(yt);
       }
@@ -453,13 +693,17 @@ const Tree = {
   openPerson(person) {
     const p = person.info, r = person.rels;
 
-    const relRow = (label, names) => {
-      if (!names?.length) return '';
+    const relRow = (label, val) => {
+      const names = Array.isArray(val) ? val : (val ? [val] : []);
+      if (!names.length) return '';
       return `<div class="modal-rel-row">
         <span class="rel-lbl">${label}</span>
         <span class="rel-vals">${names.map(esc).join(', ')}</span>
       </div>`;
     };
+
+    const patGps = [r.patGrandmother, r.patGrandfather].filter(Boolean);
+    const matGps = [r.matGrandmother, r.matGrandfather].filter(Boolean);
 
     const dateStr = [
       p.dateOfBirth ? `Born ${fmtDate(p.dateOfBirth)}${p.placeOfBirth ? ` · ${esc(p.placeOfBirth)}` : ''}` : '',
@@ -479,12 +723,13 @@ const Tree = {
           ${p.currentLocation ? `<p class="modal-loc">📍 ${esc(p.currentLocation)}</p>` : ''}
           ${p.bio ? `<p class="modal-bio">${esc(p.bio)}</p>` : ''}
           <div class="modal-rels">
-            ${relRow('Grandparents',   r.grandparents)}
-            ${relRow('Parents',        r.parents)}
-            ${relRow('Siblings',       r.siblings)}
-            ${relRow('Spouse / Partner', r.spouse)}
-            ${relRow('Children',       r.children)}
-            ${relRow('Grandchildren',  r.grandchildren)}
+            ${relRow('Mother',                  r.mother)}
+            ${relRow('Father',                  r.father)}
+            ${relRow('Paternal Grandparents',   patGps)}
+            ${relRow('Maternal Grandparents',   matGps)}
+            ${relRow('Siblings',                r.siblings)}
+            ${relRow('Spouse / Partner',        r.spouse)}
+            ${relRow('Children',                r.children)}
           </div>
           <div class="modal-actions">
             <button class="btn btn-ghost btn-sm" id="editPersonBtn">Edit Info</button>
@@ -658,6 +903,9 @@ const App = {
     Tree.init();
     Router.init();
     this.updateStats();
+
+    const clearBtn = document.getElementById('clearAllBtn');
+    if (clearBtn) clearBtn.addEventListener('click', () => this.clearAll());
   },
 
   onViewChange(view) {
@@ -668,14 +916,18 @@ const App = {
 
   updateStats() {
     const persons = Storage.getAll();
-    const connections = new Set(persons.flatMap(p => RELS.flatMap(r => (p.rels[r] || []).map(normName)))).size;
+    const connSet = new Set();
+    persons.forEach(p => {
+      SINGLE_RELS.forEach(r => { if (p.rels[r]) connSet.add(normName(p.rels[r])); });
+      LIST_RELS.forEach(r => (p.rels[r] || []).forEach(n => connSet.add(normName(n))));
+    });
     const stories = persons.filter(p => p.info.bio).length;
 
     const sM = document.getElementById('statMembers');
     const sC = document.getElementById('statConnections');
     const sS = document.getElementById('statStories');
     if (sM) sM.textContent = persons.length;
-    if (sC) sC.textContent = connections;
+    if (sC) sC.textContent = connSet.size;
     if (sS) sS.textContent = stories;
   },
 
@@ -684,6 +936,17 @@ const App = {
     Storage.delete(id);
     Modal.close();
     showToast('Person removed from tree.', 'info');
+    App.updateStats();
+    if (Router.current === 'tree')    Tree.render();
+    if (Router.current === 'members') Members.render();
+  },
+
+  clearAll() {
+    const count = Storage.getAll().length;
+    if (count === 0) { showToast('Nothing to clear — the tree is already empty.', 'info'); return; }
+    if (!confirm(`Permanently delete all ${count} entries and start over? This cannot be undone.`)) return;
+    localStorage.removeItem(Storage.KEY);
+    showToast('All family data cleared. Starting fresh!', 'info');
     App.updateStats();
     if (Router.current === 'tree')    Tree.render();
     if (Router.current === 'members') Members.render();
