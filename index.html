@@ -1,288 +1,249 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Thomas Family Tree</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Thomas Family Tree — An Illustrated Lineage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Pinyon+Script&family=Tangerine:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- ── Nav ── -->
-  <nav class="navbar">
-    <div class="nav-inner">
-      <div class="nav-brand">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-          <path d="M12 6v6l4 2"/>
-        </svg>
-        Thomas Family Tree
-      </div>
-      <div class="nav-links">
-        <button class="nav-btn" data-nav="home">Home</button>
-        <button class="nav-btn" data-nav="form">Add My Info</button>
-        <button class="nav-btn" data-nav="tree">Family Tree</button>
-        <button class="nav-btn" data-nav="members">Members</button>
-      </div>
-      <button class="hamburger" id="hamburger">&#9776;</button>
-    </div>
-    <div class="mobile-menu hidden" id="mobileMenu">
-      <button class="nav-btn" data-nav="home">Home</button>
-      <button class="nav-btn" data-nav="form">Add My Info</button>
-      <button class="nav-btn" data-nav="tree">Family Tree</button>
-      <button class="nav-btn" data-nav="members">Members</button>
-    </div>
-  </nav>
+<!-- Falling petals decoration -->
+<div id="petals"></div>
 
-  <!-- ── Home ── -->
-  <div class="view" id="view-home">
-    <section class="hero">
-      <div class="hero-content">
-        <h1>Welcome to the<br/>Thomas Family Tree</h1>
-        <p class="hero-sub">Share your story, connect across generations, and see exactly where you fit in our family's history.</p>
-        <div class="hero-actions">
-          <button class="btn btn-primary" data-nav="form">Add Your Information</button>
-          <button class="btn btn-outline" data-nav="tree">View Family Tree</button>
-        </div>
-      </div>
-      <div class="hero-graphic">
-        <svg viewBox="0 0 220 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="80" y="10" width="60" height="36" rx="8" fill="#2d6a4f" opacity=".9"/>
-          <text x="110" y="34" text-anchor="middle" fill="white" font-size="11" font-family="Georgia,serif">Grandparent</text>
-          <line x1="110" y1="46" x2="110" y2="65" stroke="#52b788" stroke-width="2"/>
-          <rect x="20" y="65" width="60" height="36" rx="8" fill="#40916c" opacity=".9"/>
-          <text x="50" y="89" text-anchor="middle" fill="white" font-size="11" font-family="Georgia,serif">Parent</text>
-          <rect x="140" y="65" width="60" height="36" rx="8" fill="#40916c" opacity=".9"/>
-          <text x="170" y="89" text-anchor="middle" fill="white" font-size="11" font-family="Georgia,serif">Parent</text>
-          <line x1="110" y1="65" x2="50" y2="65" stroke="#52b788" stroke-width="2"/>
-          <line x1="110" y1="65" x2="170" y2="65" stroke="#52b788" stroke-width="2"/>
-          <line x1="50" y1="101" x2="50" y2="120" stroke="#52b788" stroke-width="2"/>
-          <line x1="170" y1="101" x2="170" y2="120" stroke="#52b788" stroke-width="2"/>
-          <line x1="110" y1="120" x2="50" y2="120" stroke="#52b788" stroke-width="2"/>
-          <line x1="110" y1="120" x2="170" y2="120" stroke="#52b788" stroke-width="2"/>
-          <line x1="110" y1="120" x2="110" y2="135" stroke="#52b788" stroke-width="2"/>
-          <rect x="80" y="135" width="60" height="36" rx="8" fill="#52b788"/>
-          <text x="110" y="158" text-anchor="middle" fill="white" font-size="11" font-family="Georgia,serif">You</text>
-        </svg>
-      </div>
-    </section>
-
-    <section class="stats-bar" id="homeStats">
-      <div class="stat"><span class="stat-num" id="statMembers">0</span><span class="stat-label">Members</span></div>
-      <div class="stat-div"></div>
-      <div class="stat"><span class="stat-num" id="statConnections">0</span><span class="stat-label">Connections</span></div>
-      <div class="stat-div"></div>
-      <div class="stat"><span class="stat-num" id="statStories">0</span><span class="stat-label">Stories Shared</span></div>
-    </section>
-
-    <section class="how-section">
-      <h2>How It Works</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <h3>Fill Out the Form</h3>
-          <p>Enter your name, birth details, a short story about yourself, and list your family members by name.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <h3>Submit Your Info</h3>
-          <p>Your entry is saved locally. Anyone can add themselves — the tree grows with every submission.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <h3>Explore the Tree</h3>
-          <p>See the interactive family tree with all generations laid out. Click any card to read their story.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="danger-zone">
-      <button type="button" class="btn btn-ghost btn-small" id="clearAllBtn">Start Over (clear all data)</button>
-    </section>
-  </div>
-
-  <!-- ── Form ── -->
-  <div class="view hidden" id="view-form">
-    <div class="form-wrap">
-      <div class="form-header">
-        <h2>Add Your Information</h2>
-        <p>Fill in as much or as little as you like. The more you share, the richer the tree becomes.</p>
-      </div>
-
-      <form id="personForm" novalidate>
-        <input type="hidden" id="personId" />
-
-        <fieldset class="form-section">
-          <legend>Personal Information</legend>
-          <div class="form-grid">
-
-            <div class="form-group span-2">
-              <label for="fullName">Full Name <span class="required">*</span></label>
-              <input type="text" id="fullName" placeholder="e.g. Margaret Ann Thomas" autocomplete="name" required />
-            </div>
-
-            <div class="form-group">
-              <label for="dateOfBirth">Date of Birth</label>
-              <input type="date" id="dateOfBirth" />
-            </div>
-
-            <div class="form-group">
-              <label for="dateOfDeath">Date of Death <span class="optional">(if applicable)</span></label>
-              <input type="date" id="dateOfDeath" />
-            </div>
-
-            <div class="form-group">
-              <label for="placeOfBirth">Place of Birth</label>
-              <input type="text" id="placeOfBirth" placeholder="City, State / Country" />
-            </div>
-
-            <div class="form-group">
-              <label for="currentLocation">Current Location</label>
-              <input type="text" id="currentLocation" placeholder="City, State / Country" />
-            </div>
-
-            <div class="form-group span-2">
-              <label for="bio">About Me</label>
-              <textarea id="bio" rows="4" placeholder="Share your story — career, hobbies, memories, anything you'd like family to know."></textarea>
-            </div>
-
-            <div class="form-group span-2">
-              <label for="photoUrl">Photo URL <span class="optional">(optional)</span></label>
-              <input type="url" id="photoUrl" placeholder="https://example.com/photo.jpg" />
-            </div>
-
-          </div>
-        </fieldset>
-
-        <fieldset class="form-section">
-          <legend>Family Relationships</legend>
-          <p class="section-note">Enter names as they appear (or will appear) on this site. Matching names across forms is how the tree links everyone together.</p>
-
-          <div class="rel-block">
-            <div class="rel-title"><span>Parents</span></div>
-            <div class="single-rel-row">
-              <label class="single-rel">
-                <span>Mother</span>
-                <input type="text" id="rel-mother" placeholder="e.g. Nordia Wright-Thomas" />
-              </label>
-              <label class="single-rel">
-                <span>Father</span>
-                <input type="text" id="rel-father" placeholder="e.g. Clifton Thomas" />
-              </label>
-            </div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title"><span>Grandparents &mdash; Father's Side</span></div>
-            <div class="single-rel-row">
-              <label class="single-rel">
-                <span>Paternal Grandmother</span>
-                <input type="text" id="rel-patGrandmother" placeholder="Father's mother" />
-              </label>
-              <label class="single-rel">
-                <span>Paternal Grandfather</span>
-                <input type="text" id="rel-patGrandfather" placeholder="Father's father" />
-              </label>
-            </div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title"><span>Grandparents &mdash; Mother's Side</span></div>
-            <div class="single-rel-row">
-              <label class="single-rel">
-                <span>Maternal Grandmother</span>
-                <input type="text" id="rel-matGrandmother" placeholder="Mother's mother" />
-              </label>
-              <label class="single-rel">
-                <span>Maternal Grandfather</span>
-                <input type="text" id="rel-matGrandfather" placeholder="Mother's father" />
-              </label>
-            </div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title">
-              <span>Siblings</span>
-              <button type="button" class="btn-add" id="addBtn-siblings">+ Add</button>
-            </div>
-            <p class="rel-hint">Siblings automatically share your Mother and Father unless they submit their own form with different parents.</p>
-            <div class="rel-list" id="relList-siblings"></div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title">
-              <span>Spouse / Partner</span>
-              <button type="button" class="btn-add" id="addBtn-spouse">+ Add</button>
-            </div>
-            <div class="rel-list" id="relList-spouse"></div>
-          </div>
-
-          <div class="rel-block">
-            <div class="rel-title">
-              <span>Children</span>
-              <button type="button" class="btn-add" id="addBtn-children">+ Add</button>
-            </div>
-            <div class="rel-list" id="relList-children"></div>
-          </div>
-
-        </fieldset>
-
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost" id="clearFormBtn">Clear Form</button>
-          <button type="submit" class="btn btn-primary">Save to Tree</button>
-        </div>
-      </form>
+<!-- Header -->
+<header class="app-header">
+  <div class="brand">
+    <div class="crest"></div>
+    <div class="title-block">
+      <div class="title-script">The Thomas Family</div>
+      <div class="title-sub">An Illustrated Lineage</div>
     </div>
   </div>
+  <div class="header-actions">
+    <div class="stat-pill">Souls Recorded <span class="num" id="statPeople">0</span></div>
+    <div class="stat-pill">Generations <span class="num" id="statGens">0</span></div>
+    <button class="header-btn" id="btnFit">Fit to View</button>
+    <button class="header-btn" id="btnClear" title="Erase all entries and start over">Start Over</button>
+  </div>
+</header>
 
-  <!-- ── Tree ── -->
-  <div class="view hidden" id="view-tree">
-    <div class="tree-toolbar">
-      <h2>Family Tree</h2>
-      <div class="tree-controls">
-        <button class="ctrl-btn" id="zoomIn" title="Zoom in">&#43;</button>
-        <button class="ctrl-btn" id="zoomOut" title="Zoom out">&#8722;</button>
-        <button class="ctrl-btn" id="zoomFit" title="Fit to screen">&#x26F6;</button>
+<!-- Sidebar form -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-toggle" id="sidebarToggle" title="Collapse panel">‹</div>
+  <div class="sidebar-inner">
+    <input type="hidden" id="personId" />
+
+    <div class="section-title">Your Entry</div>
+    <div class="section-hint">Write your own name, then stitch in the kin who came before and beside you. The tree weaves entries together by matching names.</div>
+
+    <div class="field-group">
+      <label class="label">Full Name</label>
+      <input class="input" id="fName" placeholder="e.g. David Thomas">
+    </div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="label">Born</label>
+        <input class="input" id="fBorn" placeholder="1985">
+      </div>
+      <div class="field-group">
+        <label class="label">Died</label>
+        <input class="input" id="fDied" placeholder="—">
       </div>
     </div>
-    <div class="tree-canvas" id="treeCanvas">
-      <svg id="treeSvg" style="width:100%;height:100%;cursor:grab;">
-        <defs>
-          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.12)" />
-          </filter>
-        </defs>
-        <g id="treeRoot"></g>
-      </svg>
-    </div>
-    <div class="tree-legend">
-      <span class="legend-item"><span class="legend-dot submitted"></span> Submitted</span>
-      <span class="legend-item"><span class="legend-dot ghost"></span> Mentioned (not yet submitted)</span>
-    </div>
-  </div>
 
-  <!-- ── Members ── -->
-  <div class="view hidden" id="view-members">
-    <div class="members-wrap">
-      <div class="members-header">
-        <h2>Family Members</h2>
-        <input type="text" id="memberSearch" class="search-input" placeholder="Search by name…" />
+    <div class="field-group">
+      <label class="label">Location</label>
+      <input class="input" id="fLoc" placeholder="Kingston, JM">
+    </div>
+
+    <div class="field-group">
+      <label class="label">A few words</label>
+      <textarea class="textarea" id="fBio" placeholder="Engineer, traveler, makes a mean curry…"></textarea>
+    </div>
+
+    <div class="section-title">Parents</div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="label">Mother</label>
+        <input class="input" id="fMother" placeholder="Catherine Sinclair">
       </div>
-      <div class="members-grid" id="membersGrid"></div>
+      <div class="field-group">
+        <label class="label">Father</label>
+        <input class="input" id="fFather" placeholder="James Thomas">
+      </div>
     </div>
+
+    <div class="section-title">Grandparents</div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="label">Paternal Grandmother</label>
+        <input class="input" id="fPGM" placeholder="Margaret Hayes">
+      </div>
+      <div class="field-group">
+        <label class="label">Paternal Grandfather</label>
+        <input class="input" id="fPGF" placeholder="William Thomas">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label class="label">Maternal Grandmother</label>
+        <input class="input" id="fMGM" placeholder="Eleanor Brooks">
+      </div>
+      <div class="field-group">
+        <label class="label">Maternal Grandfather</label>
+        <input class="input" id="fMGF" placeholder="Robert Sinclair">
+      </div>
+    </div>
+
+    <div class="section-title">Spouse</div>
+    <div class="field-group">
+      <input class="input" id="fSpouse" placeholder="Sarah Miller">
+    </div>
+
+    <div class="section-title">Siblings</div>
+    <div class="section-hint">They inherit your parents unless they file their own entry.</div>
+    <div class="add-many" id="siblingList"></div>
+    <button class="add-btn" id="btnAddSib">＋ add a sibling</button>
+
+    <div class="section-title">Children</div>
+    <div class="add-many" id="childList"></div>
+    <button class="add-btn" id="btnAddChild">＋ add a child</button>
+
+    <button class="submit-btn" id="btnSubmit">Add to the Tree ❦</button>
+  </div>
+</aside>
+
+<!-- Canvas wrapper -->
+<div class="canvas-wrap" id="canvasWrap">
+
+  <!-- Corner filigree -->
+  <svg class="corner tl" viewBox="0 0 100 100" fill="none" stroke="#8b6a3f" stroke-width="1.4">
+    <path d="M5 50 Q5 5 50 5" />
+    <path d="M15 50 Q15 15 50 15" stroke-width="1"/>
+    <path d="M10 30 Q22 20 30 10" stroke-width=".8"/>
+    <circle cx="50" cy="5" r="2.5" fill="#b88528" stroke="none"/>
+    <circle cx="5" cy="50" r="2.5" fill="#b88528" stroke="none"/>
+    <path d="M28 28 Q35 22 42 28 Q42 35 35 35 Q28 35 28 28" fill="#b88528" opacity=".5" stroke="none"/>
+  </svg>
+  <svg class="corner tr" viewBox="0 0 100 100" fill="none" stroke="#8b6a3f" stroke-width="1.4">
+    <path d="M5 50 Q5 5 50 5" />
+    <path d="M15 50 Q15 15 50 15" stroke-width="1"/>
+    <path d="M10 30 Q22 20 30 10" stroke-width=".8"/>
+    <circle cx="50" cy="5" r="2.5" fill="#b88528" stroke="none"/>
+    <circle cx="5" cy="50" r="2.5" fill="#b88528" stroke="none"/>
+    <path d="M28 28 Q35 22 42 28 Q42 35 35 35 Q28 35 28 28" fill="#b88528" opacity=".5" stroke="none"/>
+  </svg>
+  <svg class="corner bl" viewBox="0 0 100 100" fill="none" stroke="#8b6a3f" stroke-width="1.4">
+    <path d="M5 50 Q5 5 50 5" />
+    <path d="M15 50 Q15 15 50 15" stroke-width="1"/>
+    <path d="M10 30 Q22 20 30 10" stroke-width=".8"/>
+    <circle cx="50" cy="5" r="2.5" fill="#b88528" stroke="none"/>
+    <circle cx="5" cy="50" r="2.5" fill="#b88528" stroke="none"/>
+    <path d="M28 28 Q35 22 42 28 Q42 35 35 35 Q28 35 28 28" fill="#b88528" opacity=".5" stroke="none"/>
+  </svg>
+  <svg class="corner br" viewBox="0 0 100 100" fill="none" stroke="#8b6a3f" stroke-width="1.4">
+    <path d="M5 50 Q5 5 50 5" />
+    <path d="M15 50 Q15 15 50 15" stroke-width="1"/>
+    <path d="M10 30 Q22 20 30 10" stroke-width=".8"/>
+    <circle cx="50" cy="5" r="2.5" fill="#b88528" stroke="none"/>
+    <circle cx="5" cy="50" r="2.5" fill="#b88528" stroke="none"/>
+    <path d="M28 28 Q35 22 42 28 Q42 35 35 35 Q28 35 28 28" fill="#b88528" opacity=".5" stroke="none"/>
+  </svg>
+
+  <!-- Empty state -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-ornament">❦</div>
+    <h2>An empty page awaits.</h2>
+    <p>Fill in the panel to the left with your name and family — your kin will appear here, illustrated and connected.</p>
   </div>
 
-  <!-- ── Modal ── -->
-  <div class="modal-overlay hidden" id="modal">
-    <div class="modal-box" role="dialog" aria-modal="true">
-      <button class="modal-close" id="modalClose" aria-label="Close">&#10005;</button>
-      <div id="modalContent"></div>
-    </div>
+  <!-- Main SVG tree -->
+  <svg class="tree-svg" id="tree" viewBox="0 0 2400 1500" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <radialGradient id="portraitFill" cx="35%" cy="30%" r="80%">
+        <stop offset="0%" stop-color="#eaca94"/>
+        <stop offset="50%" stop-color="#c8a06a"/>
+        <stop offset="100%" stop-color="#8e6d3c"/>
+      </radialGradient>
+      <radialGradient id="ghostFill" cx="35%" cy="30%" r="80%">
+        <stop offset="0%" stop-color="#ece2c8"/>
+        <stop offset="50%" stop-color="#cdbf9c"/>
+        <stop offset="100%" stop-color="#a89878"/>
+      </radialGradient>
+      <filter id="nodeShadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+        <feOffset dx="0" dy="3"/>
+        <feComponentTransfer><feFuncA type="linear" slope=".5"/></feComponentTransfer>
+        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="nodeShadowHover" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5"/>
+        <feOffset dx="0" dy="5"/>
+        <feComponentTransfer><feFuncA type="linear" slope=".6"/></feComponentTransfer>
+        <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g id="viewport">
+      <g id="generationLabels"></g>
+      <g id="connectorsLayer"></g>
+      <g id="nodesLayer"></g>
+    </g>
+  </svg>
+</div>
+
+<!-- Legend -->
+<div class="legend" id="legend">
+  <div class="legend-title">Marks of the tree</div>
+  <div class="legend-row"><span class="legend-swatch legend-marriage"></span>Union</div>
+  <div class="legend-row"><span class="legend-swatch legend-line"></span>Descent</div>
+  <div class="legend-row"><span class="legend-swatch legend-sibling"></span>Sibling bond</div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="ctrl-btn" id="zoomIn" title="Zoom in">＋</button>
+  <button class="ctrl-btn" id="zoomOut" title="Zoom out">−</button>
+  <button class="ctrl-btn" id="zoomFit" title="Fit">◇</button>
+  <button class="ctrl-btn" id="zoomCenter" title="Center">⊙</button>
+</div>
+
+<!-- Detail panel -->
+<aside class="detail-panel" id="detail">
+  <button class="detail-close" id="detailClose">×</button>
+  <div class="detail-portrait" id="detailPortrait">DT</div>
+  <div class="detail-name" id="detailName">—</div>
+  <div class="detail-dates" id="detailDates">—</div>
+  <div class="detail-divider"></div>
+  <div class="detail-section">
+    <h4>Of this place</h4>
+    <p id="detailLoc">—</p>
   </div>
+  <div class="detail-section">
+    <h4>A life in brief</h4>
+    <p id="detailBio">—</p>
+  </div>
+  <div class="detail-section">
+    <h4>Kin</h4>
+    <div class="relations-list" id="detailRelations"></div>
+  </div>
+  <div class="detail-actions">
+    <button class="detail-btn" id="detailEdit">Edit Entry</button>
+    <button class="detail-btn detail-btn-danger" id="detailDelete">Remove</button>
+  </div>
+  <div class="stamp">Verified<br>Kin</div>
+</aside>
 
-  <!-- ── Toast ── -->
-  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip"></div>
 
-  <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
