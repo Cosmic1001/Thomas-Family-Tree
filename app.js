@@ -403,27 +403,44 @@ const Tree = {
 
     // ── 3. Build family units (a unit = 1 single or 2 spouses) ──
     const unitOf = new Map();   // norm → unit_id
-    const units  = new Map();   // unit_id → { members: [...], children: Set<unit_id>, parents: Set<unit_id> }
+    const units  = new Map();   // unit_id → { members, children, parents, memberAncestors }
 
     for (const norm of allNorm) {
       if (unitOf.has(norm)) continue;
       const sp = [...(spouseOf.get(norm) || [])].filter(s => !unitOf.has(s)).sort()[0];
       if (sp) {
         const id = `u:${[norm, sp].sort().join('+')}`;
-        units.set(id, { members: [norm, sp], children: new Set(), parents: new Set() });
+        units.set(id, {
+          members: [norm, sp],
+          children: new Set(),
+          parents: new Set(),
+          memberAncestors: [null, null]   // per-member ancestor unit (couples only)
+        });
         unitOf.set(norm, id);
         unitOf.set(sp,   id);
       } else {
         const id = `u:${norm}`;
-        units.set(id, { members: [norm], children: new Set(), parents: new Set() });
+        units.set(id, {
+          members: [norm],
+          children: new Set(),
+          parents: new Set(),
+          memberAncestors: [null]
+        });
         unitOf.set(norm, id);
       }
     }
 
-    // Link parent unit → child unit (pick best-matching parent unit)
+    // Link parents to children.
+    //   • If the child unit is a SINGLE person → descent edge (parent unit becomes
+    //     the descent parent; same as before).
+    //   • If the child unit is a COUPLE → store the parent unit on memberAncestors
+    //     for the specific member. This way each spouse's lineage hangs above THEM,
+    //     not above the couple as a whole.
     for (const [chi, ps] of parentsOf) {
       const cu = unitOf.get(chi);
       if (!cu) continue;
+      const cuData = units.get(cu);
+
       let bestU = null, bestMatch = 0;
       for (const par of ps) {
         const pu = unitOf.get(par);
@@ -431,18 +448,90 @@ const Tree = {
         const m = units.get(pu).members.filter(mem => ps.has(mem)).length;
         if (m > bestMatch) { bestU = pu; bestMatch = m; }
       }
-      if (bestU && bestU !== cu) {
+      if (!bestU || bestU === cu) continue;
+
+      if (cuData.members.length === 2) {
+        const memberIdx = cuData.members.indexOf(chi);
+        if (memberIdx >= 0) cuData.memberAncestors[memberIdx] = bestU;
+      } else {
         units.get(bestU).children.add(cu);
-        units.get(cu).parents.add(bestU);
+        cuData.parents.add(bestU);
       }
     }
 
-    // ── 4. Assign unit generation levels (BFS from root units) ──
-    const unitLevel = new Map();
-    const allUnits  = [...units.keys()];
-    const rootUnits = allUnits.filter(u => units.get(u).parents.size === 0);
+    // ── 4. Layout helpers ──
 
-    const q = rootUnits.map(u => [u, 0]);
+    // Width of the column an ancestor chain needs above a unit's member.
+    // For a couple, the effective spouse-gap widens to fit the ancestor columns
+    // above each spouse without overlapping.
+    const colW = new Map();
+    const computeColW = (uid) => {
+      if (colW.has(uid)) return colW.get(uid);
+      const u = units.get(uid);
+      let w;
+      if (u.members.length === 1) {
+        w = NW;
+      } else {
+        const lA = u.memberAncestors[0];
+        const rA = u.memberAncestors[1];
+        const LC = lA ? computeColW(lA) : NW;
+        const RC = rA ? computeColW(rA) : NW;
+        const eg = Math.max(SPOUSE_GAP, (LC + RC) / 2 - NW);
+        w = NW + eg + LC / 2 + RC / 2;
+      }
+      colW.set(uid, w);
+      return w;
+    };
+
+    const effSpouseGap = (uid) => {
+      const u = units.get(uid);
+      if (u.members.length !== 2) return 0;
+      const lA = u.memberAncestors[0];
+      const rA = u.memberAncestors[1];
+      const LC = lA ? computeColW(lA) : NW;
+      const RC = rA ? computeColW(rA) : NW;
+      return Math.max(SPOUSE_GAP, (LC + RC) / 2 - NW);
+    };
+
+    // Compute member positions within a couple unit, given the unit's left x.
+    const memberPosInUnit = (uid, memberIdx, unitLeftX) => {
+      const u = units.get(uid);
+      if (u.members.length === 1) return unitLeftX;
+      const lA = u.memberAncestors[0];
+      const rA = u.memberAncestors[1];
+      const LC = lA ? computeColW(lA) : NW;
+      const RC = rA ? computeColW(rA) : NW;
+      const W = computeColW(uid);
+      if (memberIdx === 0) return unitLeftX + LC / 2 - NW / 2;
+      return unitLeftX + W - RC / 2 - NW / 2;
+    };
+
+    const coupleCenterX = (uid, unitLeftX) => {
+      const u = units.get(uid);
+      if (u.members.length === 1) return unitLeftX + NW / 2;
+      return (memberPosInUnit(uid, 0, unitLeftX) + memberPosInUnit(uid, 1, unitLeftX)) / 2 + NW / 2;
+    };
+
+    // ── 5. Compute generation levels (descent + ascent) ──
+    const ascDepth = new Map();
+    const computeAscDepth = (uid) => {
+      if (ascDepth.has(uid)) return ascDepth.get(uid);
+      const u = units.get(uid);
+      if (u.members.length !== 2) { ascDepth.set(uid, 0); return 0; }
+      let max = 0;
+      for (let i = 0; i < 2; i++) {
+        const a = u.memberAncestors[i];
+        if (a) max = Math.max(max, 1 + computeAscDepth(a));
+      }
+      ascDepth.set(uid, max);
+      return max;
+    };
+
+    const allUnits  = [...units.keys()];
+    const descentRoots = allUnits.filter(u => units.get(u).parents.size === 0);
+
+    const unitLevel = new Map();
+    const q = descentRoots.map(u => [u, 0]);
     let qi = 0;
     while (qi < q.length) {
       const [u, lv] = q[qi++];
@@ -451,35 +540,34 @@ const Tree = {
         for (const cu of units.get(u).children) q.push([cu, lv + 1]);
       }
     }
-
     for (const u of allUnits) if (!unitLevel.has(u)) unitLevel.set(u, 0);
 
-    // Normalize to min level = 0
-    const minLv = Math.min(...unitLevel.values());
-    for (const [u, lv] of unitLevel) unitLevel.set(u, lv - minLv);
+    // Shift down so ancestors above descent roots fit
+    let maxAsc = 0;
+    for (const u of descentRoots) maxAsc = Math.max(maxAsc, computeAscDepth(u));
+    if (maxAsc > 0) {
+      for (const [u, lv] of unitLevel) unitLevel.set(u, lv + maxAsc);
+    }
 
-    // ── 5. Recursive tidy-tree layout ──
-    const unitW = (u) => {
-      const m = units.get(u).members.length;
-      return m * NW + (m - 1) * SPOUSE_GAP;
-    };
+    // ── 6. Tidy-tree layout of the descent tree ──
     const personOrderKey = (u) => {
-      // Sort by earliest-born or alphabetical
       const mem = units.get(u).members[0];
       const person = nameMap.get(mem);
       return (person?.info.dateOfBirth || '9999') + (dispName.get(mem) || mem);
     };
-    const sortedChildren = (u) => [...units.get(u).children].sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
+    const sortedChildren = (u) =>
+      [...units.get(u).children].sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
 
     const subW = new Map();
-    const unitX = new Map();   // unit → left x of unit's leftmost member
+    const unitX = new Map();
     const beingCalc = new Set();
+    const placed = new Set();
 
     const calcW = (u) => {
       if (subW.has(u)) return subW.get(u);
-      if (beingCalc.has(u)) return unitW(u);
+      if (beingCalc.has(u)) return computeColW(u);
       beingCalc.add(u);
-      const my = unitW(u);
+      const my = computeColW(u);
       const kids = sortedChildren(u);
       if (kids.length === 0) { subW.set(u, my); return my; }
       let w = 0;
@@ -490,43 +578,72 @@ const Tree = {
       return w;
     };
 
-    const placed = new Set();
     const place = (u, leftX) => {
       if (placed.has(u)) return;
       placed.add(u);
-      const my = unitW(u);
+      const my = computeColW(u);
       const sw = calcW(u);
-      const cx = leftX + sw / 2;
-      unitX.set(u, cx - my / 2);
+      const centerX = leftX + sw / 2;
+      unitX.set(u, centerX - my / 2);
 
       const kids = sortedChildren(u);
-      let cur = leftX;
+      if (kids.length === 0) return;
+
+      // Center children under the couple/single center
+      let kidsTotal = 0;
+      for (const c of kids) kidsTotal += calcW(c);
+      if (kids.length > 1) kidsTotal += (kids.length - 1) * UNIT_GAP;
+      let cur = centerX - kidsTotal / 2;
       for (const c of kids) {
         place(c, cur);
         cur += calcW(c) + UNIT_GAP;
       }
     };
 
-    // Sort root units by name for stable layout
-    rootUnits.sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
-
+    descentRoots.sort((a, b) => personOrderKey(a).localeCompare(personOrderKey(b)));
     let total = 0;
-    rootUnits.forEach((r, i) => { total += calcW(r); if (i > 0) total += UNIT_GAP; });
+    descentRoots.forEach((r, i) => { total += calcW(r); if (i > 0) total += UNIT_GAP; });
     let cursor = -total / 2;
-    for (const r of rootUnits) {
+    for (const r of descentRoots) {
       place(r, cursor);
       cursor += calcW(r) + UNIT_GAP;
     }
 
-    // Build per-person positions
+    // Build per-person positions for descent-placed units
     const positions = new Map();
-    for (const [uid, x] of unitX) {
+    const writeMemberPositions = (uid) => {
       const u = units.get(uid);
+      const ux = unitX.get(uid);
       const y = unitLevel.get(uid) * (NH + VG);
       u.members.forEach((mem, i) => {
-        positions.set(mem, { x: x + i * (NW + SPOUSE_GAP), y });
+        positions.set(mem, { x: memberPosInUnit(uid, i, ux), y });
       });
-    }
+    };
+    for (const uid of unitX.keys()) writeMemberPositions(uid);
+
+    // ── 7. Place ascent (ancestor) units above each couple's members ──
+    const placeAscent = (uid) => {
+      const u = units.get(uid);
+      if (u.members.length !== 2) return;
+      const myLvl = unitLevel.get(uid);
+      if (myLvl == null) return;
+
+      for (let i = 0; i < 2; i++) {
+        const ancId = u.memberAncestors[i];
+        if (!ancId || unitX.has(ancId)) continue;
+        const memPos = positions.get(u.members[i]);
+        if (!memPos) continue;
+        const memberCenter = memPos.x + NW / 2;
+        const ancW = computeColW(ancId);
+        const ancLeft = memberCenter - ancW / 2;
+        unitX.set(ancId, ancLeft);
+        unitLevel.set(ancId, myLvl - 1);
+        writeMemberPositions(ancId);
+        placeAscent(ancId);
+      }
+    };
+    for (const uid of [...unitX.keys()]) placeAscent(uid);
+
     this.positions = positions;
 
     // ── Empty state ──
@@ -538,46 +655,51 @@ const Tree = {
       return;
     }
 
-    // ── 6. Render edges ──
+    // ── 8. Render edges ──
     const edgesG = this.el('g', { class: 'edges' });
 
-    // y coordinates relative to a node's bounding-box top:
-    //   circle top    = CY - CR
-    //   circle bottom = CY + CR
     const circleBottom = CY + CR;
     const circleTop    = CY - CR;
 
-    // Marriage bar between spouses (horizontal line at circle vertical-center)
+    // Marriage bar between spouses (uses member positions so it works
+    // even with widened spouse gaps from ancestor columns).
     for (const [uid, u] of units) {
       if (u.members.length !== 2 || !unitX.has(uid)) continue;
-      const x = unitX.get(uid);
-      const y = unitLevel.get(uid) * (NH + VG) + CY;
-      // Goes from right edge of left circle to left edge of right circle
-      const x1 = x + NW / 2 + CR;
-      const x2 = x + NW + SPOUSE_GAP + NW / 2 - CR;
+      const m0 = positions.get(u.members[0]);
+      const m1 = positions.get(u.members[1]);
+      if (!m0 || !m1) continue;
+      const y = m0.y + CY;
+      const x1 = m0.x + NW / 2 + CR;
+      const x2 = m1.x + NW / 2 - CR;
       edgesG.appendChild(this.el('line', {
         x1, y1: y, x2, y2: y,
         class: 'tree-marriage'
       }));
     }
 
-    // Parent → children connectors
+    // Parent → children connectors (couple/single → kids in descent tree)
     for (const [uid, u] of units) {
       if (u.children.size === 0 || !unitX.has(uid)) continue;
-      const parentY = unitLevel.get(uid) * (NH + VG);
       const isCouple = u.members.length === 2;
+      const m0 = positions.get(u.members[0]);
+      if (!m0) continue;
+      const parentY = m0.y;
 
-      // Drop source: midpoint of marriage bar for couples, bottom of bounding box for singles
-      const srcX = unitX.get(uid) + unitW(uid) / 2;
+      // Drop source: midpoint between spouses for couples, bottom of node for singles
+      const srcX = isCouple
+        ? (m0.x + NW / 2 + positions.get(u.members[1]).x + NW / 2) / 2
+        : m0.x + NW / 2;
       const srcY = isCouple ? parentY + CY : parentY + NH;
 
       const kids = [...u.children].filter(cu => unitX.has(cu));
       if (!kids.length) continue;
 
-      const kidPts = kids.map(cu => ({
-        x: unitX.get(cu) + unitW(cu) / 2,
-        y: unitLevel.get(cu) * (NH + VG) + circleTop  // top of child's circle
-      }));
+      const kidPts = kids.map(cu => {
+        const cu0 = positions.get(units.get(cu).members[0]);
+        const cu1 = units.get(cu).members.length === 2 ? positions.get(units.get(cu).members[1]) : null;
+        const cx = cu1 ? (cu0.x + NW / 2 + cu1.x + NW / 2) / 2 : cu0.x + NW / 2;
+        return { x: cx, y: cu0.y + circleTop };
+      });
 
       // Sibling bar y = middle of the gap between parent box bottom and child circle top
       const parentBottom = parentY + NH;
@@ -609,6 +731,36 @@ const Tree = {
             class: 'tree-edge'
           }));
         }
+      }
+    }
+
+    // Ancestor → specific child member (couple's left/right spouse)
+    for (const [uid, u] of units) {
+      if (u.members.length !== 2) continue;
+      if (!unitX.has(uid)) continue;
+      for (let i = 0; i < 2; i++) {
+        const ancId = u.memberAncestors[i];
+        if (!ancId || !unitX.has(ancId)) continue;
+
+        const anc = units.get(ancId);
+        const anc0 = positions.get(anc.members[0]);
+        const anc1 = anc.members.length === 2 ? positions.get(anc.members[1]) : null;
+        if (!anc0) continue;
+        const ancCenterX = anc1 ? (anc0.x + NW / 2 + anc1.x + NW / 2) / 2 : anc0.x + NW / 2;
+        const ancSrcY = anc1 ? anc0.y + CY : anc0.y + NH;
+
+        const childMember = positions.get(u.members[i]);
+        if (!childMember) continue;
+        const childCenterX = childMember.x + NW / 2;
+        const childTopY = childMember.y + circleTop;
+
+        const midY = (ancSrcY + childTopY) / 2;
+
+        // Drop from ancestor, horizontal to align with the specific spouse, then down
+        edgesG.appendChild(this.el('path', {
+          d: `M ${ancCenterX} ${ancSrcY} V ${midY} H ${childCenterX} V ${childTopY}`,
+          class: 'tree-edge'
+        }));
       }
     }
 
